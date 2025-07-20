@@ -31,6 +31,7 @@ uint8_t bluetoothRequestType;
 wl_status_t lastWiFiStatus;
 uint8_t settingReloadWiFi;
 WiFiUDP UDP;
+uint32_t udpBuffer[512];
 
 ArtNet MyArtNet;
 
@@ -175,18 +176,20 @@ void loadSettingsFromBluetooth() {
 void reconnectWiFi() {
   wl_status_t wifiStatus;
 
-  if (settingReloadWiFi && WiFi.isConnected()) {
-    WiFi.disconnect();
-  }
+  if (settingReloadWiFi) {
+    if (WiFi.isConnected()) {
+      WiFi.disconnect();
+    }
 
-  if (settings->wirelessMode == CLIENT_DHCP) {
-    WiFi.begin(settings->wirelessSSID, settings->wirelessPassword);
-    settingReloadWiFi = 0;
-  }
+    if (settings->wirelessMode == CLIENT_DHCP) {
+      WiFi.begin(settings->wirelessSSID, settings->wirelessPassword);
+      settingReloadWiFi = 0;
+    }
 
-  if (settings->wirelessMode == AP) {
-    WiFi.softAP(settings->wirelessSSID, settings->wirelessPassword);
-    settingReloadWiFi = 0;
+    if (settings->wirelessMode == AP) {
+      WiFi.softAP(settings->wirelessSSID, settings->wirelessPassword);
+      settingReloadWiFi = 0;
+    }
   }
 
   wifiStatus = WiFi.status();
@@ -208,6 +211,12 @@ void reconnectWiFi() {
 void loop() {
   loadSettingsFromBluetooth();
   reconnectWiFi();
+
+  if (UDP.parsePacket()) {
+    size_t read = UDP.read((uint8_t*)udpBuffer, sizeof(udpBuffer));
+    MyArtNet.onPacketReceived(UDP.remoteIP(), UDP.remotePort(), (uint8_t*)udpBuffer, read);
+    yield();
+  }
 
   if (currentWriteBufferIndex == 0) {
     if (breakStartedAt == 0) {
