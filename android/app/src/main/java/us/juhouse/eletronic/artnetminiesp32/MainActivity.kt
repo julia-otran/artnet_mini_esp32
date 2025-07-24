@@ -90,9 +90,17 @@ class MainViewModel(state: SavedStateHandle) : ViewModel() {
         }
     }
 
+    private fun getPassword(): String {
+        if (newPassword.isNotEmpty()) {
+            return newPassword
+        }
+
+        return currentPassword
+    }
+
     fun getSettingsRequest(): BluetoothSerialDataSettings {
         return BluetoothSerialDataSettings(
-            currentPassword,
+            getPassword(),
             channelCount.toUInt(),
             net.toUInt(),
             subnet.toUInt(),
