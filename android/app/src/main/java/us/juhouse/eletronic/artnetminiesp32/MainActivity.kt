@@ -29,7 +29,6 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,6 +47,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.viewmodel.compose.SavedStateHandleSaveableApi
+import androidx.lifecycle.viewmodel.compose.saveable
 
 interface MainActivityCallbacks {
     fun findDevices()
@@ -64,19 +66,21 @@ fun String.trim(trimLength: Int): String {
     return this.substring(0, trimLength)
 }
 
-class MainViewModel : ViewModel() {
+@OptIn(SavedStateHandleSaveableApi::class)
+class MainViewModel(state: SavedStateHandle) : ViewModel() {
     private val _uiState = MutableStateFlow(MainUiState(""))
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
-    var currentPassword by mutableStateOf("")
-    var newPassword by mutableStateOf("")
-    var channelCount by mutableStateOf("")
-    var net by mutableStateOf("")
-    var subnet by mutableStateOf("")
-    var universe by mutableStateOf("")
-    var wirelessSSID by mutableStateOf("")
-    var wirelessPassword by mutableStateOf("")
-    var wirelessMode by mutableStateOf(WirelessMode.NONE)
+
+    var currentPassword by state.saveable { mutableStateOf("") }
+    var newPassword by state.saveable { mutableStateOf("") }
+    var channelCount by state.saveable { mutableStateOf("") }
+    var net by state.saveable { mutableStateOf("") }
+    var subnet by state.saveable { mutableStateOf("") }
+    var universe by state.saveable { mutableStateOf("") }
+    var wirelessSSID by state.saveable { mutableStateOf("") }
+    var wirelessPassword by state.saveable { mutableStateOf("") }
+    var wirelessMode by state.saveable { mutableStateOf(WirelessMode.NONE) }
 
     fun setData(data: String) {
         _uiState.update {
