@@ -8,9 +8,9 @@
 #define WIFI_PASSWORD_MAX_LENGTH 200
 
 enum EEPROM_DataWirelessMode {
-    UNINITIALIZED,
-    CLIENT_DHCP,
-    AP
+    WIRELESS_MODE_UNINITIALIZED = 0,
+    WIRELESS_MODE_CLIENT_DHCP = 1,
+    WIRELESS_MODE_AP = 2
 };
 
 typedef struct {
@@ -18,7 +18,7 @@ typedef struct {
     uint16_t channelCount;
     uint8_t net;
     uint8_t subuni;
-    EEPROM_DataWirelessMode wirelessMode;
+    uint8_t wirelessMode;
     char wirelessSSID[WIFI_SSID_MAX_LENGTH + 1];
     char wirelessPassword[WIFI_PASSWORD_MAX_LENGTH + 1];
 } EEPROM_Data;
@@ -27,4 +27,4 @@ void EEPROM_DataInitialize();
 EEPROM_Data* EEPROM_DataGet();
 void EEPROM_DataStore();
 void EEPROM_DataReset();
-uint8_t EEPROM_DataIsValid(EEPROM_Data *data);
+uint8_t EEPROM_DataIsValid(EEPROM_Data *data, char **err);

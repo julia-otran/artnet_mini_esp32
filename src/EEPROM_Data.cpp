@@ -11,7 +11,7 @@ void EEPROM_DataInitialize() {
     EEPROM.begin(sizeof(EEPROM_Data));
     EEPROM.readBytes(0, &storedData, sizeof(EEPROM_Data));
 
-    if (EEPROM_DataIsValid(&storedData)) {
+    if (EEPROM_DataIsValid(&storedData, 0)) {
         memcpy(&currentData, &storedData, sizeof(EEPROM_Data));
     } else {
         EEPROM_DataReset();
@@ -31,14 +31,14 @@ void EEPROM_DataStore() {
 void EEPROM_DataReset() {
     currentData.systemPassword[0] = 0;
     currentData.channelCount = DMX_MAX_CHANNELS;
-    currentData.wirelessMode = UNINITIALIZED;
+    currentData.wirelessMode = WIRELESS_MODE_UNINITIALIZED;
     currentData.wirelessSSID[0] = 0;
     currentData.wirelessPassword[0] = 0;
 
     EEPROM_DataStore();
 }
 
-uint8_t EEPROM_DataIsValid(EEPROM_Data *data) {
+uint8_t EEPROM_DataIsValid(EEPROM_Data *data, char **err) {
 
     uint8_t dataValid = true;
     uint8_t found = false;
@@ -52,11 +52,31 @@ uint8_t EEPROM_DataIsValid(EEPROM_Data *data) {
 
     dataValid = dataValid && found;
 
+    if (!dataValid && err) {
+        (*err) = "System Password invalid.";
+        return false;
+    }
+
     dataValid = dataValid && data->channelCount >= DMX_MIN_CHANNELS && data->channelCount <= DMX_MAX_CHANNELS;
 
-    dataValid = dataValid && data->wirelessMode <= AP;
+    if (!dataValid && err) {
+        (*err) = "Channel Count invalid.";
+        return false;
+    }
+
+    dataValid = dataValid && data->wirelessMode <= WIRELESS_MODE_AP;
+
+    if (!dataValid && err) {
+        (*err) = "Wireless mode invalid.";
+        return false;
+    }
 
     dataValid = dataValid && data->net <= ART_NET_MAX_NET;
+
+    if (!dataValid && err) {
+        (*err) = "ArtNet Net invalid.";
+        return false;
+    }
 
     found = false;
 
@@ -67,7 +87,17 @@ uint8_t EEPROM_DataIsValid(EEPROM_Data *data) {
         }
     }
 
+    if (!found && err) {
+        (*err) = "Wireless SSID has no termination char.";
+        return false;
+    }
+
     dataValid = dataValid && found && strlen(data->wirelessSSID) >= WIFI_SSID_MIN_LENGTH;
+
+    if (!dataValid && err) {
+        (*err) = "Wireless SSID is too short.";
+        return false;
+    }
 
     found = false;
 
@@ -78,7 +108,17 @@ uint8_t EEPROM_DataIsValid(EEPROM_Data *data) {
         }
     }
 
+    if (!found && err) {
+        (*err) = "Wireless Password has no termination char.";
+        return false;
+    }
+
     dataValid = dataValid && found && strlen(data->wirelessPassword) >= WIFI_PASSWORD_MIN_LENGTH;
+
+    if (!dataValid && err) {
+        (*err) = "Wireless Password too short.";
+        return false;
+    }
 
     return dataValid;
 }

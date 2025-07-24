@@ -16,7 +16,8 @@ using namespace art_net;
 enum BluetoothRequestType {
   BLUETOOTH_REQUEST_TYPE_NONE,
   BLUETOOTH_REQUEST_TYPE_CHANGE_SETTINGS,
-  BLUETOOTH_REQUEST_TYPE_CHANGE_PASSWORD
+  BLUETOOTH_REQUEST_TYPE_CHANGE_PASSWORD,
+  BLUETOOTH_REQUEST_TYPE_GET_INFO,
 };
 
 EEPROM_Data* settings;
@@ -115,25 +116,79 @@ void loadSettingsFromBluetooth() {
     bluetoothRequestType = SerialBT.read();
     lastBTReceivedData = 0;
     
-    if (bluetoothRequestType != BLUETOOTH_REQUEST_TYPE_CHANGE_SETTINGS && bluetoothRequestType != BLUETOOTH_REQUEST_TYPE_CHANGE_PASSWORD) {
+    if (
+      bluetoothRequestType != BLUETOOTH_REQUEST_TYPE_CHANGE_SETTINGS && 
+      bluetoothRequestType != BLUETOOTH_REQUEST_TYPE_CHANGE_PASSWORD &&
+      bluetoothRequestType != BLUETOOTH_REQUEST_TYPE_GET_INFO
+    ) {
       bluetoothRequestType = BLUETOOTH_REQUEST_TYPE_NONE;
       while (SerialBT.available()) { SerialBT.read(); }
+    }
+
+    if (bluetoothRequestType == BLUETOOTH_REQUEST_TYPE_GET_INFO) {
+      SerialBT.print("Channel Count: ");
+      SerialBT.println(settings->channelCount);
+      SerialBT.print("ArtNet NET: ");
+      SerialBT.println(settings->net);
+      SerialBT.print("ArtNet Subnet: ");
+      SerialBT.println(settings->subuni >> 4);
+      SerialBT.print("ArtNet Universe: ");
+      SerialBT.println(settings->subuni & 0xF);
+
+      SerialBT.print("WiFi Mode: ");
+
+      switch (settings->wirelessMode) {
+        case WIRELESS_MODE_UNINITIALIZED:
+          SerialBT.println("Wireless not initialized.");
+          break;
+        case WIRELESS_MODE_CLIENT_DHCP:
+          SerialBT.println("Client DHCP");
+          break;
+        case WIRELESS_MODE_AP:
+          SerialBT.println("AP");
+          break;
+      }
+
+      SerialBT.print("WiFi Local IP: ");
+      SerialBT.println(WiFi.localIP().toString());
+      
+      SerialBT.print("WiFi SSID: ");
+      SerialBT.println(settings->wirelessSSID);
+
+      SerialBT.print("WiFi Status: ");
+      switch (WiFi.status()) {
+        case WL_IDLE_STATUS:
+          SerialBT.println("WL_IDLE_STATUS");
+          break;
+        case WL_CONNECT_FAILED:
+          SerialBT.println("WL_CONNECT_FAILED");
+          break;
+        case WL_CONNECTED:
+          SerialBT.println("WL_CONNECTED");
+          break;
+        case WL_CONNECTION_LOST:
+          SerialBT.println("WL_CONNECTION_LOST");
+          break;
+        case WL_DISCONNECTED:
+          SerialBT.println("WL_DISCONNECTED");
+          break;
+        case WL_NO_SSID_AVAIL:
+          SerialBT.println("WL_NO_SSID_AVAIL");
+          break;
+      }
+      
+      bluetoothRequestType = BLUETOOTH_REQUEST_TYPE_NONE;
     }
   } else if (SerialBT.available() > sizeof(EEPROM_Data)) {
     while (SerialBT.available()) { SerialBT.read(); }
     SerialBT.println("[ER] Protocol Fail");
-  } else if (bluetoothRequestType != BLUETOOTH_REQUEST_TYPE_NONE && SerialBT.available()) {
-    if (lastBTReceivedData == 0) {
-      lastBTReceivedData = millis();
-    } else if (millis() - lastBTReceivedData > BLUETOOTH_DATA_RECEIVE_TIMEOUT_MILLIS) {
-      while (SerialBT.available()) { SerialBT.read(); }
-      lastBTReceivedData = 0;
-    }
   } else if (bluetoothRequestType == BLUETOOTH_REQUEST_TYPE_CHANGE_SETTINGS && SerialBT.available() == sizeof(EEPROM_Data)) {
     lastBTReceivedData = 0;
     SerialBT.readBytes((uint8_t*)&tempSettings, sizeof(EEPROM_Data));
 
-    if (EEPROM_DataIsValid(&tempSettings)) {
+    char *err;
+
+    if (EEPROM_DataIsValid(&tempSettings, &err)) {
       if (strncmp(tempSettings.systemPassword, settings->systemPassword, SYSTEM_PASSWORD_MAX_LENGTH) == 0) {
         lastSettingsAuthFail = 0;
         lastSettingsAuthFailCount = 0;
@@ -153,8 +208,12 @@ void loadSettingsFromBluetooth() {
         lastSettingsAuthFail = millis();
         lastSettingsAuthFailCount++;
       }
+
+      bluetoothRequestType = BLUETOOTH_REQUEST_TYPE_NONE;
     } else {
-      SerialBT.println("[ER] Settings are invalid! Rolled back");
+      SerialBT.println("[ER] Settings are invalid! Rolled back.");
+      SerialBT.println(err);
+      bluetoothRequestType = BLUETOOTH_REQUEST_TYPE_NONE;
     }
   } else if (bluetoothRequestType == BLUETOOTH_REQUEST_TYPE_CHANGE_PASSWORD && SerialBT.available() == SYSTEM_PASSWORD_MAX_LENGTH * 2) {
     lastBTReceivedData = 0;
@@ -170,7 +229,18 @@ void loadSettingsFromBluetooth() {
       lastSettingsAuthFail = millis();
       lastSettingsAuthFailCount++;
     }
-  }
+    bluetoothRequestType = BLUETOOTH_REQUEST_TYPE_NONE;
+  } else if (bluetoothRequestType != BLUETOOTH_REQUEST_TYPE_NONE && SerialBT.available()) {
+    if (lastBTReceivedData == 0) {
+      lastBTReceivedData = millis();
+    } else if (millis() - lastBTReceivedData > BLUETOOTH_DATA_RECEIVE_TIMEOUT_MILLIS) {
+      SerialBT.print("[ER] Read Timeout. Available: ");
+      SerialBT.print(SerialBT.available());
+      while (SerialBT.available()) { SerialBT.read(); }
+      lastBTReceivedData = 0;
+      bluetoothRequestType = BLUETOOTH_REQUEST_TYPE_NONE;
+    }
+  } 
 }
 
 void reconnectWiFi() {
@@ -181,12 +251,12 @@ void reconnectWiFi() {
       WiFi.disconnect();
     }
 
-    if (settings->wirelessMode == CLIENT_DHCP) {
+    if (settings->wirelessMode == WIRELESS_MODE_CLIENT_DHCP) {
       WiFi.begin(settings->wirelessSSID, settings->wirelessPassword);
       settingReloadWiFi = 0;
     }
 
-    if (settings->wirelessMode == AP) {
+    if (settings->wirelessMode == WIRELESS_MODE_AP) {
       WiFi.softAP(settings->wirelessSSID, settings->wirelessPassword);
       settingReloadWiFi = 0;
     }
